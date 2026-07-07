@@ -27,7 +27,6 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_IDS: ${{ secrets.TELEGRAM_CHAT_IDS }}
           DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
-          WORK24_AUTH_KEY: ${{ secrets.WORK24_AUTH_KEY }}
           SARAMIN_ACCESS_KEY: ${{ secrets.SARAMIN_ACCESS_KEY }}
           WANTED_API_KEY: ${{ secrets.WANTED_API_KEY }}
           EXPERIENCED_ONLY: "0"

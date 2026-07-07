@@ -9,7 +9,7 @@
 |---|---|---|
 | 원티드 OpenAPI | 민간 기업 | 공식 API (Jobs + Companies) |
 | 사람인 API | 민간 기업 | 공식 API (하루 500회) |
-| 워크넷 채용정보 API | 민간 기업 | 공공데이터포털 공식 API |
+| 워크넷(고용24) 채용정보 | 민간 기업 | 검색결과 수집 (하루 1회, robots.txt 허용) |
 | 공공기관 채용정보 API | 공기업·공공기관 | 공공데이터포털 공식 API |
 | 국가공무원채용시스템 | 공무원 전산직 | 공고 게시판 스크래핑 |
 
@@ -41,12 +41,10 @@
 2. [인사혁신처_공공기관 채용정보](https://www.data.go.kr/data/15125273/openapi.do)에서 **활용신청** (즉시 승인, 무료)
 3. 마이페이지 → **일반 인증키(Decoding)** 복사 → `DATA_GO_KR_SERVICE_KEY`
 
-### 2-1. 고용24 오픈API 키 발급 (워크넷 민간기업 공고용, 선택)
-1. [고용24 오픈API](https://www.work24.go.kr)에서 인증키 신청 (data.go.kr 키와 **별개**)
-2. 발급받은 키를 `WORK24_AUTH_KEY`에 등록
-3. 키가 없으면 워크넷 소스는 자동으로 건너뛴다
-4. ⚠️ 승인 후 받는 명세서의 `요청주소`·필드명이 다르면
-   `collectors/worknet.py` 상단 `BASE_URL`을 맞춘다
+> **워크넷(고용24) 민간기업 공고는 키 없이 동작한다.** 오픈API 인증키가
+> 개인에게 발급되지 않아 채용정보 검색 결과를 하루 1회 읽는 방식
+> (robots.txt 허용 경로, 정부 공공 사이트의 공개 정보, 비상업적 개인 용도).
+> 검색 키워드는 `collectors/worknet.py`의 `SEARCH_KEYWORDS`에서 조정.
 
 ### 3. 사람인 API 키 발급 (선택)
 1. [oapi.saramin.co.kr](https://oapi.saramin.co.kr) 이용신청 → 승인 후 **access-key** 발급
@@ -69,7 +67,6 @@
 | `TELEGRAM_BOT_TOKEN` | 봇 토큰 | ✅ |
 | `TELEGRAM_CHAT_IDS` | chat_id (여러 명이면 `123,456`) | ✅ |
 | `DATA_GO_KR_SERVICE_KEY` | 일반 인증키(Decoding) | 공공기관용 |
-| `WORK24_AUTH_KEY` | 고용24 오픈API 키 | 워크넷(민간)용, 선택 |
 | `SARAMIN_ACCESS_KEY` | 사람인 access-key | 선택 |
 | `WANTED_API_KEY` | 원티드 인증키 | 선택 |
 

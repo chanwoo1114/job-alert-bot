@@ -28,10 +28,7 @@ def collect_all():
             print("[saramin] SARAMIN_ACCESS_KEY 없음 → 건너뜀")
 
     if config.ENABLE_WORKNET:
-        if config.WORK24_AUTH_KEY:
-            jobs += WorknetCollector(config.WORK24_AUTH_KEY).fetch()
-        else:
-            print("[worknet] WORK24_AUTH_KEY 없음 → 건너뜀 (고용24 오픈API에서 별도 발급)")
+        jobs += WorknetCollector().fetch()
 
     if config.ENABLE_ALIO:
         if config.DATA_GO_KR_SERVICE_KEY:

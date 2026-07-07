@@ -38,10 +38,6 @@ TELEGRAM_CHAT_IDS = [
 # → 공공기관/공기업(alio) 수집에 사용
 DATA_GO_KR_SERVICE_KEY = os.environ.get("DATA_GO_KR_SERVICE_KEY", "")
 
-# ── 고용24(work24.go.kr) 오픈API 인증키 ─────────────────
-# 워크넷 민간기업 채용정보용. 고용24 오픈API에서 별도 신청 (data.go.kr 키와 다름!)
-WORK24_AUTH_KEY = os.environ.get("WORK24_AUTH_KEY", "")
-
 # ── 사람인 공식 API ─────────────────────────────────────
 # https://oapi.saramin.co.kr 이용신청 후 발급받는 access-key
 SARAMIN_ACCESS_KEY = os.environ.get("SARAMIN_ACCESS_KEY", "")

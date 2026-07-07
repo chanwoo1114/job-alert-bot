@@ -1,102 +1,118 @@
 """
-워크넷(고용24) 채용정보 수집기 (민간 기업 개발자 공고).
+고용24(워크넷) 채용정보 수집기 (민간 기업 개발자 공고) — 크롤링 방식.
 
-⚠️ 이 API는 공공데이터포털(data.go.kr) 키가 아니라
-   고용24 오픈API(https://www.work24.go.kr → 고용24 오픈API → 인증키 신청)에서
-   발급받는 별도 authKey 가 필요하다. .env 의 WORK24_AUTH_KEY 에 넣을 것.
+오픈API 인증키가 개인에게 발급되지 않아, 채용정보 검색 결과 페이지를
+하루 1회 읽는 방식으로 수집한다.
 
-   (공공기관 채용은 alio.py 가 data.go.kr 키로 수집하므로 이 키가 없어도
-    공공기관/공무원 공고는 정상 동작한다.)
+- robots.txt 확인 완료: 채용정보 목록/상세 경로(/wk/a/b/...)는 수집 허용.
+- 정부 공공 사이트의 공개 채용정보, 비상업적 개인 용도, 저빈도(하루 1회) 호출.
+- 키워드별로 최신순 1페이지(50건)씩만 읽는다. 요청 간 0.5초 대기.
+
+⚠️ 사이트 개편으로 HTML 구조가 바뀌면 LIST_URL 과 파싱 로직을 조정할 것.
 """
+import time
+
 import requests
-import xml.etree.ElementTree as ET
+from bs4 import BeautifulSoup
 
 from .base import Collector, Job
-import config
 
-# 고용24 채용정보 목록 API. 인증키 발급 후 명세서의 '요청주소'와 다르면 맞춰 수정.
-BASE_URL = "https://www.work24.go.kr/cm/openApi/call/wk/callOpenApiSvcInfo210L01.do"
+BASE = "https://www.work24.go.kr"
+LIST_URL = BASE + "/wk/a/b/1200/retriveDtlEmpSrchList.do"
 
-# 개발/전산 관련 직종코드 (워크넷 직종코드 '정보통신' 계열).
-# 명세서의 공통코드(직종코드) API로 정확한 코드를 조회해 넣으면 정확도가 올라간다.
-# 코드를 비워두면 키워드 필터로만 거른다.
-JOB_CODES = []  # 예: ["133", "134"]
+# 검색 키워드 (각각 최신순 50건씩 조회 후 합침, 이후 filters.py 가 한 번 더 거름)
+SEARCH_KEYWORDS = [
+    "개발자", "백엔드", "프론트엔드", "소프트웨어개발", "프로그래머", "웹개발",
+]
 
-
-def _text(node, *tags, default=""):
-    """여러 후보 태그명 중 먼저 값이 있는 것을 반환 (명세 버전차 대응)."""
-    for tag in tags:
-        el = node.find(tag)
-        if el is not None and el.text:
-            return el.text.strip()
-    return default
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/122.0 Safari/537.36"
+    )
+}
 
 
 class WorknetCollector(Collector):
     name = "worknet"
 
-    def __init__(self, auth_key: str, rows: int = 100):
-        self.auth_key = auth_key
+    def __init__(self, rows: int = 50):
         self.rows = rows
 
-    def _request(self, job_code: str | None = None) -> list[Job]:
+    def _search(self, keyword: str) -> list[Job]:
         params = {
-            "authKey": self.auth_key,
-            "callTp": "L",                 # L: 목록
-            "returnType": "XML",
-            "startPage": 1,
-            "display": self.rows,
+            "srcKeyword": keyword,
+            "keyword": keyword,
+            "resultCnt": self.rows,
+            "sortField": "DATE",
+            "sortOrderBy": "DESC",
+            "pageIndex": 1,
         }
-        if job_code:
-            params["occupation"] = job_code
-
-        resp = requests.get(BASE_URL, params=params, timeout=20)
+        resp = requests.get(LIST_URL, params=params, headers=HEADERS, timeout=20)
         resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
 
         jobs: list[Job] = []
-        root = ET.fromstring(resp.content)
-        # 오류 응답이면 메시지 출력
-        err = root.find(".//message") if root.tag in ("error", "Error") else None
-        if err is not None:
-            print(f"[worknet] API 오류: {err.text}")
-            return []
+        for link in soup.select("a[href*=empDetailAuthView]"):
+            tr = link.find_parent("tr")
+            if tr is None:
+                continue
+            tds = tr.find_all("td")
+            if not tds:
+                continue
 
-        # 응답 구조: <wantedRoot><wanted>...</wanted></wantedRoot>
-        for item in root.iter("wanted"):
-            title = _text(item, "title", "empWantedTitle")
-            company = _text(item, "company", "empBusiNm")
+            title = " ".join(link.get_text(strip=True).split())
             if not title:
                 continue
-            url = _text(
-                item,
-                "wantedInfoUrl", "wantedMobileUrl",
-                "empWantedHomepgDetail", "empWantedMobileUrl",
-                default="https://www.work24.go.kr/",
-            )
+
+            # td[0]: 회사명 + 제목(+버튼). 첫 텍스트 조각이 회사명.
+            td0_parts = [p for p in tds[0].get_text("|", strip=True).split("|") if p]
+            company = td0_parts[0] if td0_parts else ""
+
+            # td[1]: 급여 | 경력 | 학력 | 근무지역 (항목 수는 공고마다 다를 수 있음)
+            salary = experience = location = ""
+            if len(tds) > 1:
+                parts = [p for p in tds[1].get_text("|", strip=True).split("|") if p]
+                if parts:
+                    salary = parts[0]
+                    location = parts[-1] if len(parts) > 1 else ""
+                for p in parts:
+                    if p.startswith(("경력", "신입")):
+                        experience = p
+                        break
+
+            # td[2]: "마감일 : YYYY-MM-DD ..." 형태
+            deadline = ""
+            if len(tds) > 2:
+                for p in tds[2].get_text("|", strip=True).split("|"):
+                    if "마감일" in p:
+                        deadline = p.split(":", 1)[-1].strip()
+                        break
+
             jobs.append(
                 Job(
                     source=self.name,
                     title=title,
                     company=company,
-                    url=url,
-                    category=_text(item, "jobsNm", "empWantedTypeNm"),
-                    location=_text(item, "region", "regionNm", "basicAddr"),
-                    experience=_text(item, "career", "empWantedCareerNm"),
-                    deadline=_text(item, "closeDt", "empWantedEndt"),
-                    salary=_text(item, "sal", "salTpNm"),
+                    url=BASE + link["href"],
+                    location=location,
+                    experience=experience,
+                    deadline=deadline,
+                    salary=salary,
                 )
             )
         return jobs
 
     def fetch(self) -> list[Job]:
         results: list[Job] = []
-        codes = JOB_CODES or [None]  # 코드가 없으면 전체 조회 후 키워드 필터
-        for code in codes:
+        for kw in SEARCH_KEYWORDS:
             try:
-                results.extend(self._request(code))
+                results.extend(self._search(kw))
             except Exception as e:
-                print(f"[worknet] 요청 실패(code={code}): {e}")
-        # url 기준 중복 제거
+                print(f"[worknet] 검색 실패(keyword={kw}): {e}")
+            time.sleep(0.5)  # 서버 부담 최소화
+
+        # url 기준 중복 제거 (키워드 간 겹침 제거)
         seen, deduped = set(), []
         for j in results:
             if j.url in seen:
