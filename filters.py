@@ -4,7 +4,8 @@ from collectors import Job
 
 
 def _haystack(job: Job) -> str:
-    return " ".join([job.title, job.category, job.company]).lower()
+    extra = " ".join(str(v) for v in job.extra.values())
+    return " ".join([job.title, job.category, job.company, extra]).lower()
 
 
 def is_developer_job(job: Job) -> bool:
@@ -20,8 +21,13 @@ def is_developer_job(job: Job) -> bool:
     if not any(k.lower() in text for k in config.DEV_KEYWORDS):
         return False
 
+    # 민간 공고는 관심 스택(FastAPI/Django/React 등)이 언급된 것만 통과
+    if job.source in config.PRIVATE_SOURCES:
+        if not any(k.lower() in text for k in config.STACK_KEYWORDS):
+            return False
+
     # 경력직만 보기 옵션 (민간 공고에만 적용)
-    if config.EXPERIENCED_ONLY and job.source == "worknet":
+    if config.EXPERIENCED_ONLY and job.source in config.PRIVATE_SOURCES:
         exp = job.experience or ""
         if "신입" in exp and "경력" not in exp:
             return False

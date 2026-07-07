@@ -21,8 +21,10 @@ BASE = "https://www.work24.go.kr"
 LIST_URL = BASE + "/wk/a/b/1200/retriveDtlEmpSrchList.do"
 
 # 검색 키워드 (각각 최신순 50건씩 조회 후 합침, 이후 filters.py 가 한 번 더 거름)
+# 고용24 검색은 공고 본문까지 매칭되므로 스택명으로 검색하면
+# 제목에 스택이 없어도 해당 스택을 쓰는 공고가 잡힌다.
 SEARCH_KEYWORDS = [
-    "개발자", "백엔드", "프론트엔드", "소프트웨어개발", "프로그래머", "웹개발",
+    "fastapi", "django", "python", "파이썬", "react", "리액트",
 ]
 
 HEADERS = {
@@ -48,7 +50,7 @@ class WorknetCollector(Collector):
             "sortOrderBy": "DESC",
             "pageIndex": 1,
         }
-        resp = requests.get(LIST_URL, params=params, headers=HEADERS, timeout=20)
+        resp = requests.get(LIST_URL, params=params, headers=HEADERS, timeout=35)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
 
@@ -99,6 +101,8 @@ class WorknetCollector(Collector):
                     experience=experience,
                     deadline=deadline,
                     salary=salary,
+                    # 본문 매칭으로 잡힌 공고도 스택 필터를 통과하도록 검색어를 기록
+                    extra={"스택": keyword},
                 )
             )
         return jobs

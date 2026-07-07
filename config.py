@@ -68,6 +68,15 @@ DEV_KEYWORDS = [
     "vue", "kotlin", "golang", "nest",
 ]
 
+# ── 민간기업 공고 스택 필터 ─────────────────────────────
+# 민간 소스(워크넷/사람인/원티드)는 아래 스택 키워드가 있는 공고만 받는다.
+# 공공기관/공무원 공고는 스택 표기가 없는 경우가 많아 적용하지 않는다.
+PRIVATE_SOURCES = {"worknet", "saramin", "wanted"}
+STACK_KEYWORDS = [
+    "fastapi", "django", "flask", "python", "파이썬", "장고",
+    "react", "리액트", "next.js", "nextjs",
+]
+
 # 제외 키워드 (있으면 거른다) — 오탐 줄이기용
 EXCLUDE_KEYWORDS = [
     "영업", "회계", "경리", "간호", "요양", "운전", "생산직", "조리",
