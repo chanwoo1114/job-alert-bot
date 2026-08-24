@@ -6,7 +6,7 @@ import hashlib
 
 @dataclass
 class Job:
-    source: str                 # "worknet" | "alio" | "gosi"
+    source: str                 # "worknet" | "alio" | "gosi" | "saramin" | "wanted"
     title: str                  # 공고 제목
     company: str                # 회사/기관명
     url: str                    # 상세 링크
@@ -16,6 +16,11 @@ class Job:
     deadline: str = ""          # 마감일
     salary: str = ""            # 급여
     extra: dict = field(default_factory=dict)  # 기관 정보 등 부가 데이터
+
+    # ── 필터가 채우는 분류 정보 (수집기는 건드리지 않는다) ──
+    tracks: list = field(default_factory=list)   # "dev" | "transport" (둘 다 가능)
+    certs: list = field(default_factory=list)    # 공고에서 발견한 우대 자격증명
+    cert_starred: bool = False                   # 교통기사 계열이면 True → ⭐ 최우선
 
     def uid(self) -> str:
         """중복 판정용 고유 키. url이 있으면 url, 없으면 source+title+company 해시."""

@@ -15,9 +15,12 @@
     "keyword":"..", "salary":{"name":".."},
     "expiration-date":"YYYY-MM-DD" } ] } }
 """
+import time
+
 import requests
 
 from .base import Collector, Job
+import config
 
 BASE_URL = "https://oapi.saramin.co.kr/job-search"
 
@@ -45,10 +48,36 @@ class SaraminCollector(Collector):
         self.keywords = keywords
         self.count = count  # 최대 110
 
+    def _keyword_groups(self) -> list[str]:
+        """검색어 그룹 목록. 개발어와 교통어를 한 요청에 섞으면 서로를 밀어내므로
+        트랙별로 따로 호출한다 (하루 500회 한도라 2회는 부담 없음)."""
+        groups: list[str] = []
+        if config.ENABLE_DEV_TRACK:
+            groups.append(self.keywords)
+        if config.ENABLE_TRANSPORT_TRACK:
+            groups.append(",".join(config.TRANSPORT_SEARCH_KEYWORDS))
+        return [g for g in groups if g]
+
     def fetch(self) -> list[Job]:
+        results: list[Job] = []
+        for group in self._keyword_groups():
+            results.extend(self._search(group))
+            time.sleep(0.3)
+
+        # url 기준 중복 제거 (그룹 간 겹침 제거)
+        seen, deduped = set(), []
+        for j in results:
+            if j.url in seen:
+                continue
+            seen.add(j.url)
+            deduped.append(j)
+        print(f"[saramin] 수집 {len(deduped)}건")
+        return deduped
+
+    def _search(self, keywords: str) -> list[Job]:
         params = {
             "access-key": self.access_key,
-            "keywords": self.keywords,
+            "keywords": keywords,
             "count": self.count,
             "start": 1,
             "sort": "pd",        # 최신 등록일순
@@ -60,7 +89,7 @@ class SaraminCollector(Collector):
             resp.raise_for_status()
             data = resp.json()
         except Exception as e:
-            print(f"[saramin] 요청 실패: {e}")
+            print(f"[saramin] 요청 실패(keywords={keywords}): {e}")
             return []
 
         job_list = data.get("jobs", {}).get("job", [])
@@ -87,5 +116,4 @@ class SaraminCollector(Collector):
                     extra={"기술": it.get("keyword", "")},
                 )
             )
-        print(f"[saramin] 수집 {len(jobs)}건")
         return jobs

@@ -16,6 +16,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from .base import Collector, Job
+import config
 
 BASE = "https://www.work24.go.kr"
 LIST_URL = BASE + "/wk/a/b/1200/retriveDtlEmpSrchList.do"
@@ -23,7 +24,7 @@ LIST_URL = BASE + "/wk/a/b/1200/retriveDtlEmpSrchList.do"
 # 검색 키워드 (각각 최신순 50건씩 조회 후 합침, 이후 filters.py 가 한 번 더 거름)
 # 고용24 검색은 공고 본문까지 매칭되므로 스택명으로 검색하면
 # 제목에 스택이 없어도 해당 스택을 쓰는 공고가 잡힌다.
-SEARCH_KEYWORDS = [
+STACK_SEARCH_KEYWORDS = [
     "fastapi", "django", "python", "파이썬", "react", "리액트",
 ]
 
@@ -41,7 +42,7 @@ class WorknetCollector(Collector):
     def __init__(self, rows: int = 50):
         self.rows = rows
 
-    def _search(self, keyword: str) -> list[Job]:
+    def _search(self, keyword: str, kind: str = "스택") -> list[Job]:
         params = {
             "srcKeyword": keyword,
             "keyword": keyword,
@@ -101,17 +102,28 @@ class WorknetCollector(Collector):
                     experience=experience,
                     deadline=deadline,
                     salary=salary,
-                    # 본문 매칭으로 잡힌 공고도 스택 필터를 통과하도록 검색어를 기록
-                    extra={"스택": keyword},
+                    # 본문 매칭으로 잡힌 공고도 필터를 통과하도록 검색어를 기록.
+                    # 개발 트랙의 스택 필터는 "스택" 키만 보므로, 교통 검색어는
+                    # "검색어" 키에 넣어 개발 공고로 오분류되지 않게 한다.
+                    extra={kind: keyword},
                 )
             )
         return jobs
 
+    def _search_terms(self) -> list[tuple[str, str]]:
+        """(검색어, 종류) 목록. 켜져 있는 트랙만 조회한다."""
+        terms: list[tuple[str, str]] = []
+        if config.ENABLE_DEV_TRACK:
+            terms += [(kw, "스택") for kw in STACK_SEARCH_KEYWORDS]
+        if config.ENABLE_TRANSPORT_TRACK:
+            terms += [(kw, "검색어") for kw in config.TRANSPORT_SEARCH_KEYWORDS]
+        return terms
+
     def fetch(self) -> list[Job]:
         results: list[Job] = []
-        for kw in SEARCH_KEYWORDS:
+        for kw, kind in self._search_terms():
             try:
-                results.extend(self._search(kw))
+                results.extend(self._search(kw, kind))
             except Exception as e:
                 print(f"[worknet] 검색 실패(keyword={kw}): {e}")
             time.sleep(0.5)  # 서버 부담 최소화

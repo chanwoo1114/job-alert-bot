@@ -8,6 +8,8 @@
 ⚠️ 엔드포인트/파라미터/필드명은 활용신청 후 받는 명세서 기준으로 확인할 것.
    JSON 응답을 지원하므로 여기서는 JSON 파싱 기준으로 작성.
 """
+import time
+
 import requests
 
 from .base import Collector, Job
@@ -20,15 +22,19 @@ BASE_URL = "https://apis.data.go.kr/1051000/recruitment/list"
 class AlioCollector(Collector):
     name = "alio"
 
-    def __init__(self, service_key: str, rows: int = 100):
+    def __init__(self, service_key: str, rows: int = 100, max_pages: int = 5):
         self.service_key = service_key
         self.rows = rows
+        # 교통 직무는 전산직보다 공고 수가 적어 뒤쪽 페이지에 묻힌다.
+        # 한 페이지(100건)만 읽으면 놓치므로 여러 페이지를 훑는다.
+        self.max_pages = max_pages
 
-    def fetch(self) -> list[Job]:
+    def _fetch_page(self, page: int) -> tuple[list[dict], int]:
+        """한 페이지를 읽어 (항목 목록, 전체 건수) 반환. 실패하면 ([], 0)."""
         params = {
             "serviceKey": self.service_key,
             "numOfRows": self.rows,
-            "pageNo": 1,
+            "pageNo": page,
             "resultType": "json",
             # 접수중인 공고만
             "ongoingYn": "Y",
@@ -38,14 +44,32 @@ class AlioCollector(Collector):
             resp.raise_for_status()
             data = resp.json()
         except Exception as e:
-            print(f"[alio] 요청 실패: {e}")
-            return []
+            print(f"[alio] 요청 실패(page={page}): {e}")
+            return [], 0
 
         # 응답 구조: {"resultCode": 200, "totalCount": n, "result": [ {...}, ... ]}
         if data.get("resultCode") != 200:
             print(f"[alio] API 오류: {data.get('resultCode')} {data.get('resultMsg')}")
-            return []
-        items = data.get("result") or []
+            return [], 0
+        return data.get("result") or [], int(data.get("totalCount") or 0)
+
+    def fetch(self) -> list[Job]:
+        items: list[dict] = []
+        total = None
+        for page in range(1, self.max_pages + 1):
+            page_items, page_total = self._fetch_page(page)
+            if total is None and page_total:
+                total = page_total
+            if not page_items:
+                break
+            items.extend(page_items)
+            time.sleep(0.3)  # 공공 API 부담 최소화
+            if len(items) >= (total or 0):
+                break
+
+        if total and len(items) < total:
+            print(f"[alio] 전체 {total}건 중 {len(items)}건만 조회 "
+                  f"(max_pages={self.max_pages}) — 놓치는 공고가 있으면 늘릴 것")
 
         jobs: list[Job] = []
         for it in items:
