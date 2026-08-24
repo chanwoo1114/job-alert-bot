@@ -151,8 +151,9 @@ GOSI_TRANSPORT_KEYS = [
 # 공공/공무원은 경력 구분이 애매해서 무시하고 다 통과시킴.
 EXPERIENCED_ONLY = os.environ.get("EXPERIENCED_ONLY", "0") == "1"
 
-# 한 번에 보낼 최대 공고 수 (너무 많으면 잘라냄)
-MAX_ITEMS_PER_RUN = int(os.environ.get("MAX_ITEMS_PER_RUN", "40"))
+# 한 번에 보낼 최대 공고 수 (초과분은 버리지 않고 다음 실행으로 넘어간다)
+# 교통 트랙이 붙어 하루 신규가 40건을 넘기 시작해서 80으로 올렸다.
+MAX_ITEMS_PER_RUN = int(os.environ.get("MAX_ITEMS_PER_RUN", "80"))
 
 # 이미 보낸 공고 기록 파일
 SEEN_PATH = os.path.join(os.path.dirname(__file__), "data", "seen.json")
